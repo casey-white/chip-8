@@ -1,34 +1,37 @@
+use crate::Rom;
+
 struct Registers {
-    // General registers represented as v0-vf in technical docs
+    /// General registers represented as v0-vf in technical docs
     general_registers: [u8; 16],
-    // 16 bit index register used for to store memory addresses
+    /// 16 bit index register used for to store memory addresses
     index: u16,
-    // delay and sound registers, when non-zero they decrement at 60hz
+    /// delay and sound registers, when non-zero they decrement at 60hz
     delay_timer: u8,
     sound_timer: u8,
 }
 
 struct Stack {
-    // stack which allows for subroutines, each point to memory addresses
+    /// stack which allows for subroutines, each point to memory addresses
     stack: [u16; 16],
-    // stack pointer which points to location in the stack
+    /// stack pointer which points to location in the stack
+    /// https://austinmorlan.com/posts/chip8_emulator/#8-bit-stack-pointer
     stack_pointer: u8,
 }
 
 pub struct CPU {
-    // 4kb of internal memory
+    /// 4kb of internal memory
     memory: [u8; 4096],
-    // program counter, points to current memory location, should be >= 0x000
+    /// program counter, points to current memory location, should be >= 0x000
     program_counter: u16,
-    // Chip registers
+    /// Chip registers
     registers: Registers,
-    // stack for subroutines
+    /// stack for subroutines
     stack: Stack,
 }
 
 impl CPU {
 
-    // constructor
+    /// constructor
     pub fn new() -> CPU {
         CPU {
             memory: [0; 4096],
@@ -44,6 +47,15 @@ impl CPU {
                 stack_pointer: 0,
             },
         }
+    }
+
+    pub fn load_rom(&self, rom: Rom) {
+
+        let mem = &rom.memory[..rom.size];
+
+        print!("{}", mem.len())
+
+
     }
 
 }

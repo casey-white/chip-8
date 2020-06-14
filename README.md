@@ -7,5 +7,5 @@ Probably over documented, but when practicing, I like to make sure I can explain
 To run, in the base directory:
 
 ```
-    cargo run
+    cargo run <rom_filename>
 ```
