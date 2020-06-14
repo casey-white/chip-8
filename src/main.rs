@@ -1,3 +1,8 @@
+mod cpu;
+
+
 fn main() {
-    println!("Hello, world!");
+
+    let chip = cpu::CPU::new();
+
 }
