@@ -338,9 +338,9 @@ impl CPU {
         self.registers.general_registers[0x0F] = 0;
 
         for byte in 0..num_of_bytes {
-            let y = (self.registers.general_registers[register_y] as usize + byte as usize) % SCREEN_HEIGHT;
+            let y = (self.registers.general_registers[register_y] as usize + byte as) % SCREEN_HEIGHT;
             for bit in 0..8 {
-                let x = (self.registers.general_registers[register_x] as usize + bit as usize) % SCREEN_WIDTH;
+                let x = (self.registers.general_registers[register_x] as usize + bit) % SCREEN_WIDTH;
                 let color = (self.memory[(self.registers.index as usize + byte as usize)] >> (7 - bit)) & 1;
                 self.registers.general_registers[0x0F] |= color & self.video_buffer[y][x];
                 self.video_buffer[y][x] ^= color;
