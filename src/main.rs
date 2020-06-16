@@ -1,3 +1,5 @@
+extern crate rand;
+
 use std::env;
 
 mod cpu;
@@ -6,6 +8,11 @@ mod font;
 
 use cpu::CPU;
 use rom::Rom;
+
+
+const SCREEN_HEIGHT: usize = 32;
+const SCREEN_WIDTH: usize = 64;
+const SCREEN_SCALE: usize = 32;
 
 
 fn main() {
