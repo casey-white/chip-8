@@ -18,6 +18,7 @@ struct Registers {
     /// delay and sound registers, when non-zero they decrement at 60hz
     delay_timer: u8,
     sound_timer: u8,
+    keypad: [bool; 16],
 }
 
 struct Stack {
@@ -48,6 +49,7 @@ pub struct CPU {
 enum PCActions {
     Next,
     Skip,
+    StepBack,
     Jump(u16),
 }
 
@@ -73,6 +75,7 @@ impl CPU {
                 index: 0,
                 delay_timer: 0,
                 sound_timer: 0,
+                keypad: [false; 16],
             },
             stack: Stack {
                 addresses: [0; 16],
@@ -160,7 +163,7 @@ impl CPU {
             (0x0e, _, 0x09, 0x0e) => self.skip_if_key(x),
             (0x0e, _, 0x0a, 0x01) => self.skip_if_not_key(x),
             (0x0f, _, 0x00, 0x07) => self.load_register_from_delay(x),
-            (0x0f, _, 0x00, 0x0a) => self.load_key_press(x),
+            (0x0f, _, 0x00, 0x0a) => self.wait_key_press(x),
             (0x0f, _, 0x01, 0x05) => self.load_delay_from_register(x),
             (0x0f, _, 0x01, 0x08) => self.load_sound_from_register(x),
             (0x0f, _, 0x01, 0x0e) => self.add_index(x),
@@ -174,6 +177,7 @@ impl CPU {
         match pc_action {
             PCActions::Next => self.program_counter += OPCODE_SIZE,
             PCActions::Skip => self.program_counter += 2 * OPCODE_SIZE,
+            PCActions::StepBack => self.program_counter -= OPCODE_SIZE,
             PCActions::Jump(addr) => self.program_counter = addr,
         }
 
@@ -224,7 +228,7 @@ impl CPU {
 
     // Skip if the two registers being compared are equivalent,
     fn compare_registers(&self, register_x: usize, register_y: usize) -> PCActions {
-        PCActions::skip_if(self.registers.general_registers[register_x] == self.registers.general_registers[register_x])
+        PCActions::skip_if(self.registers.general_registers[register_x] == self.registers.general_registers[register_y])
     }
 
     // Load data into selected register
@@ -335,19 +339,123 @@ impl CPU {
     // Draws sprite to screen
     fn display(&mut self, register_x: usize, register_y: usize, num_of_bytes: usize) -> PCActions {
 
-        let y = self.registers.general_registers[register_y] % SCREEN_HEIGHT;
-        let x = self.registers.general_registers[register_x] % SCREEN_WIDTH;
+        // handles wrapping
+        let y: usize = (self.registers.general_registers[register_y] as usize) % SCREEN_HEIGHT;
+        let x: usize = (self.registers.general_registers[register_x] as usize)% SCREEN_WIDTH;
+        // reset collision register
         self.registers.general_registers[0x0F] = 0;
 
+        // n number of bytes stored in I register
         for row in 0..num_of_bytes {
+            let current_byte = self.memory[(self.registers.index as usize + row)];
+            // We know 8 columns because a byte is 8
             for col in 0..8 {
-                let color = (self.memory[(self.registers.index as usize + byte)] >> (7 - bit)) & 1;
-                self.registers.general_registers[0x0F] |= color & self.video_buffer[y][x];
-                self.video_buffer[y][x] ^= color;
+                let bit_on = (current_byte >> (7 - col)) & 1;
+                // check if the bits overlap
+                self.registers.general_registers[0x0F] |= bit_on & self.video_buffer[y + row][x + col];
+                // xor bit status with what is in video buffer at that position
+                self.video_buffer[y + row][x + col] ^= bit_on;
             }
         }
 
         self.video_changed = true;
         PCActions::Next
     }
+
+    // Skip if selected key (by register) is pressed
+    fn skip_if_key(&self, register: usize) -> PCActions {
+        PCActions::skip_if(self.registers.keypad[self.registers.general_registers[register] as usize])
+    }
+
+    // Skip if selected key (by register) is not pressed
+    fn skip_if_not_key(&self, register: usize) -> PCActions {
+        PCActions::skip_if(!self.registers.keypad[self.registers.general_registers[register] as usize])
+    }
+
+    // Load delay timer value into selected register
+    fn load_register_from_delay(&mut self, register: usize) -> PCActions {
+        self.registers.general_registers[register] = self.registers.delay_timer;
+        PCActions::Next
+    }
+
+    // Wait for keypress, if no keypress occurs stepback the PC counter
+    fn wait_key_press(&mut self, register: usize) -> PCActions {
+        for i in 0..self.registers.keypad.len() {
+            if self.registers.keypad[i] {
+                self.registers.general_registers[register] = i as u8;
+                return PCActions::Next
+            }
+        }
+        PCActions::StepBack
+    }
+
+    // Set delay timer to the value in selected register
+    fn load_delay_from_register(&mut self, register: usize) -> PCActions {
+        self.registers.delay_timer = self.registers.general_registers[register];
+        PCActions::Next
+    }
+
+    // Set delay timer to the value in selected register
+    fn load_sound_from_register(&mut self, register: usize) -> PCActions {
+        self.registers.delay_timer = self.registers.general_registers[register];
+        PCActions::Next
+    }
+
+    // Add to index from the value in the selected register
+    fn add_index(&mut self, register: usize) -> PCActions {
+        self.registers.index += self.registers.general_registers[register] as u16;
+        PCActions::Next
+    }
+
+    // Load a sprite to the index register based on value in selected register
+    fn index_sprite(&mut self, register: usize) -> PCActions {
+
+        // offset to the location in memory where the font set is saved
+        let offset = 0x50;
+        let register_value = self.registers.general_registers[register];
+
+        // Each font character is 5 bytes.
+        self.registers.index = offset + (5 * register_value) as u16;
+
+        PCActions::Next
+    }
+
+    // Store a binary coded decimal in locations Index...Index+2 from selected index
+    fn store_bcd(&mut self, register: usize) -> PCActions {
+
+        let register_value = self.registers.general_registers[register];
+        let index: usize = self.registers.index as usize;
+
+        self.memory[index] = register_value / 100;
+        self.memory[index + 1] = (register_value % 100) / 10;
+        self.memory[index + 2] = register_value % 10;
+
+        PCActions::Next
+
+    }
+
+    fn store_registers(&mut self, register: usize) -> PCActions {
+
+        let register_value: usize = self.registers.general_registers[register] as usize;
+
+        for i in 0..register_value + 1 {
+            self.memory[self.registers.index as usize + i] = self.registers.general_registers[i];
+        }
+
+        PCActions::Next
+
+    }
+
+    fn load_registers_from_index(&mut self, register: usize) -> PCActions {
+
+        let register_value: usize = self.registers.general_registers[register] as usize;
+
+        for i in 0..register_value + 1 {
+            self.registers.general_registers[i] = self.memory[self.registers.index as usize + i]
+        }
+
+        PCActions::Next
+
+    }
+
 }
