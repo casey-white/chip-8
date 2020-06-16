@@ -10,6 +10,14 @@ use crate::SCREEN_WIDTH;
 
 const OPCODE_SIZE: u16 = 2;
 
+// Again references https://github.com/starrhorne/chip8-rust/blob/master/src/processor.rs#L11
+pub struct State<'a> {
+    // Lifetime, will refernece the video buffer array from cpu
+    pub video_buffer: &'a [[u8; SCREEN_WIDTH]; SCREEN_HEIGHT],
+    pub video_changed: bool,
+    pub beep: bool,
+}
+
 struct Registers {
     /// General registers represented as v0-vf in technical docs
     general_registers: [u8; 16],
@@ -111,6 +119,29 @@ impl CPU {
         }
 
         mem
+    }
+
+    // Represents an operation occuring and the things that happen around that
+    pub fn tick(&mut self, keypad: [bool; 16]) -> State {
+
+        self.registers.keypad = keypad;
+        self.video_changed = false;
+
+        if self.registers.delay_timer > 0 {
+            self.registers.delay_timer -= 1
+        }
+        if self.registers.sound_timer > 0 {
+            self.registers.sound_timer -= 1
+        }
+        let operation = self.get_operation();
+        self.run_operation(operation);
+
+        State {
+            video_buffer: &self.video_buffer,
+            video_changed: self.video_changed,
+            beep: self.registers.sound_timer > 0,
+        }
+
     }
 
     // Take the next two codes and combine them into an u16 bit opcode
@@ -459,3 +490,7 @@ impl CPU {
     }
 
 }
+
+#[cfg(test)]
+#[path = "./cpu_test.rs"]
+mod cpu_test;
