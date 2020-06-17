@@ -182,7 +182,7 @@ impl CPU {
             (0x08, _, _, 0x02) => self.set_and(x, y),
             (0x08, _, _, 0x03) => self.set_xor(x, y),
             (0x08, _, _, 0x04) => self.add_from_register(x, y),
-            (0x08, _, _, 0x05) => self.substract_from_register(x, y),
+            (0x08, _, _, 0x05) => self.subtract_from_register(x, y),
             (0x08, _, _, 0x06) => self.shift_right(x),
             (0x08, _, _, 0x07) => self.subtract_no_borrow_from_register(x, y),
             (0x08, _, _, 0x0e) => self.shift_left(x),
@@ -208,8 +208,8 @@ impl CPU {
         match pc_action {
             PCActions::Next => self.program_counter += OPCODE_SIZE,
             PCActions::Skip => self.program_counter += 2 * OPCODE_SIZE,
-            PCActions::StepBack => self.program_counter -= OPCODE_SIZE,
             PCActions::Jump(addr) => self.program_counter = addr,
+            PCActions::StepBack => (),
         }
 
     }
@@ -303,14 +303,15 @@ impl CPU {
         let x_value = self.registers.general_registers[register_x] as u16;
         let y_value = self.registers.general_registers[register_y] as u16;
         let result = x_value + y_value;
-        self.registers.general_registers[register_x] = result as u8;
         // Send result to carry register (register vf)
         self.registers.general_registers[0x0F] = if result > 0xFF { 1 } else { 0 };
+        self.registers.general_registers[register_x] = result as u8;
         PCActions::Next
     }
 
     // Subtraction with wrapping between the two registers.
-    fn substract_from_register(&mut self, register_x: usize, register_y: usize) -> PCActions {
+    // If something breaks, CHECK THIS
+    fn subtract_from_register(&mut self, register_x: usize, register_y: usize) -> PCActions {
         let x_value = self.registers.general_registers[register_x] as u8;
         let y_value = self.registers.general_registers[register_y] as u8;
         self.registers.general_registers[0x0F] = if x_value > y_value { 1 } else { 0 };
@@ -372,7 +373,7 @@ impl CPU {
 
         // handles wrapping
         let y: usize = (self.registers.general_registers[register_y] as usize) % SCREEN_HEIGHT;
-        let x: usize = (self.registers.general_registers[register_x] as usize)% SCREEN_WIDTH;
+        let x: usize = (self.registers.general_registers[register_x] as usize) % SCREEN_WIDTH;
         // reset collision register
         self.registers.general_registers[0x0F] = 0;
 
@@ -428,7 +429,7 @@ impl CPU {
 
     // Set delay timer to the value in selected register
     fn load_sound_from_register(&mut self, register: usize) -> PCActions {
-        self.registers.delay_timer = self.registers.general_registers[register];
+        self.registers.sound_timer = self.registers.general_registers[register];
         PCActions::Next
     }
 
@@ -467,9 +468,7 @@ impl CPU {
 
     fn store_registers(&mut self, register: usize) -> PCActions {
 
-        let register_value: usize = self.registers.general_registers[register] as usize;
-
-        for i in 0..register_value + 1 {
+        for i in 0..register + 1 {
             self.memory[self.registers.index as usize + i] = self.registers.general_registers[i];
         }
 
@@ -479,9 +478,7 @@ impl CPU {
 
     fn load_registers_from_index(&mut self, register: usize) -> PCActions {
 
-        let register_value: usize = self.registers.general_registers[register] as usize;
-
-        for i in 0..register_value + 1 {
+        for i in 0..register + 1 {
             self.registers.general_registers[i] = self.memory[self.registers.index as usize + i]
         }
 
