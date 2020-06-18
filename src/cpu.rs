@@ -47,7 +47,7 @@ pub struct CPU {
     /// stack for subroutines
     stack: Stack,
     /// video location
-    video_buffer: [[u8; SCREEN_WIDTH]; SCREEN_HEIGHT],
+    pub video_buffer: [[u8; SCREEN_WIDTH]; SCREEN_HEIGHT],
     video_changed: bool,
 }
 
@@ -370,23 +370,24 @@ impl CPU {
     // https://github.com/starrhorne/chip8-rust/blob/master/src/processor.rs
     // Draws sprite to screen
     fn display(&mut self, register_x: usize, register_y: usize, num_of_bytes: usize) -> PCActions {
+        
 
-        // handles wrapping
-        let y: usize = (self.registers.general_registers[register_y] as usize) % SCREEN_HEIGHT;
-        let x: usize = (self.registers.general_registers[register_x] as usize) % SCREEN_WIDTH;
         // reset collision register
         self.registers.general_registers[0x0F] = 0;
 
         // n number of bytes stored in I register
         for row in 0..num_of_bytes {
+            let y: usize = (self.registers.general_registers[register_y] as usize + row) % SCREEN_HEIGHT;
             let current_byte = self.memory[(self.registers.index as usize + row)];
             // We know 8 columns because a byte is 8
             for col in 0..8 {
+                let x: usize = (self.registers.general_registers[register_x] as usize + col) % SCREEN_WIDTH;
                 let bit_on = (current_byte >> (7 - col)) & 1;
                 // check if the bits overlap
-                self.registers.general_registers[0x0F] |= bit_on & self.video_buffer[y + row][x + col];
+                println!("x : {}, y : {}", x , y);
+                self.registers.general_registers[0x0F] |= bit_on & self.video_buffer[y][x];
                 // xor bit status with what is in video buffer at that position
-                self.video_buffer[y + row][x + col] ^= bit_on;
+                self.video_buffer[y][x] ^= bit_on;
             }
         }
 
