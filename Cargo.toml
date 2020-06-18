@@ -8,3 +8,6 @@ edition = "2018"
 
 [dependencies]
 rand = "0.7.3"
+
+[dependencies.sdl2]
+git = "https://github.com/rust-sdl2/rust-sdl2"
